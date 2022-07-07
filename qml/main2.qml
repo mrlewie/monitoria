@@ -3,7 +3,6 @@ import QtQuick.Controls 2.4
 import QtQuick.Layouts 1.15
 import QtLocation 5.12
 import QtPositioning 5.12
-
 import QtCharts 2.13
 
 ApplicationWindow {
@@ -14,7 +13,103 @@ ApplicationWindow {
   visible: true
 
   // custom parameters
-  property bool inEditSession: false       // global edit session tracker
+  property bool inEditSession: false         // global edit session tracker
+
+  // popup window for edit
+  Popup {
+    id: editPopup
+    x: (parent.width - width) / 2
+    y: (parent.height - height) / 2
+    width: parent.width / 1.5
+    height: parent.height / 1.5
+    padding: 5
+    modal: true
+    background:
+    Rectangle {
+      anchors.fill: parent
+      color: "#262626"
+      radius: 3
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      color: "#404040"
+      radius: 3
+
+      // header
+      Rectangle {
+        id: popupHeader
+        height: 50
+        anchors {
+          top: parent.top
+          left: parent.left
+          right: parent.right
+        }
+        color: "#595959"
+
+        // header text
+        Text {
+          anchors {
+            top: parent.top
+            bottom: parent.bottom
+            left: parent.left
+            leftMargin: 10
+
+          }
+          verticalAlignment: Text.AlignVCenter
+          text: "Create monitoring site"
+          color: "white"
+          font {
+            family: "Arial"
+            pixelSize: 16
+            weight: Font.Medium
+          }
+        }
+      }
+
+      //code header
+      Text {
+        id: codeHeader
+        width: 200
+        anchors {
+          top: popupHeader.bottom
+          left: parent.left
+          topMargin: 20
+          leftMargin: 20
+        }
+        text: "Site Code"
+        color: "white"
+      }
+
+      // code text field
+      TextField {
+        id: codeValue
+        width: 200
+        height: 25
+        anchors {
+          top: codeHeader.bottom
+          left: codeHeader.left
+          topMargin: 10
+        }
+        verticalAlignment: Text.AlignVCenter
+        color: "white"
+        font {
+          family: "Arial"
+          pixelSize: 12
+        }
+        placeholderText: "Enter a unique site code"
+        //placeholderTextColor: "red"
+        //textColor: "red"
+        maximumLength: 100
+        background: Rectangle {color: "#262626"; radius: 3}
+        //style: TextFieldStyle {textColor: "red"}
+        //background: Rectangle {radius:3; color: "#262626"}
+      }
+
+    }
+    //onAccepted: console.log("Ok clicked")
+    //onRejected: console.log("Cancel clicked")
+  }
 
   // window background color
   Rectangle {
@@ -105,7 +200,7 @@ ApplicationWindow {
 
       // list of all monitoring areas
       ListView {
-        id: monitoringAreasList
+        id: sitesList
         anchors {
           top: leftPanelHeader.bottom
           bottom: parent.bottom
@@ -113,12 +208,12 @@ ApplicationWindow {
           right: parent.right
         }
         spacing: 3
-        model: MonitoringAreasModel
+        model: SitesModel
         delegate:
 
         // monitoring area list delegate
         Item {
-          id: monitoringAreaListDelegate
+          id: sitesDelegate
           width: parent.width
           height: 40
 
@@ -131,7 +226,7 @@ ApplicationWindow {
 
           // monitoring area code
           Text {
-            id: monitoringAreaListCode
+            id: sitesCode
             width: 50
             anchors {
               top: parent.top
@@ -181,7 +276,7 @@ ApplicationWindow {
 
           onClicked: {
             if (mouse.button == Qt.LeftButton) {
-              MonitoringAreasModel.deselect_polys();  // deselect all polys
+              SitesModel.deselectAreas();  // deselect polygons
 
               // move this to a mappolygon class in python
               if (inEditSession == true) {
@@ -230,7 +325,7 @@ ApplicationWindow {
         // map polygon view
         MapItemView {
           id: mapPolygonsView
-          model: MonitoringAreasModel
+          model: SitesModel
           delegate:
 
           // map polygon delegate
@@ -256,7 +351,7 @@ ApplicationWindow {
 
               onClicked: {
                 if (mouse.button == Qt.LeftButton) {
-                  MonitoringAreasModel.select_poly(index)         // select clicked poly
+                  SitesModel.selectArea(index);
                 }
               }
             }
@@ -419,9 +514,13 @@ ApplicationWindow {
             }
 
             onClicked: {
-              MonitoringAreasModel.insert_monitoring_area(tempPolygon.path)  // insert row
-              tempPolygon.path = []   // reset temp geom to empty list
-              inEditSession = false;  // end edit session
+              editPopup.open()                         // open popup
+              SitesModel.insertArea(tempPolygon.path)  // insert row
+              tempPolygon.path = []                    // reset temp geom to empty list
+
+
+
+              inEditSession = false;                   // end edit session
             }
           }
 
@@ -550,7 +649,7 @@ ApplicationWindow {
             }
 
             onClicked: {
-              MonitoringAreasModel.delete_monitoring_area()  // delete selected polygon(s)
+              SitesModel.deleteArea(-1)  // -1 uses pyside index tracker
             }
           }
 
@@ -659,20 +758,11 @@ ApplicationWindow {
 
         ValueAxis{
           id: xAxis
-          //min: 0
-          //max: 477
-          //   //tickCount: 9
-          //   //labelFormat: "%.0f"
-          //   titleVisible: true
-          //   gridVisible: true
-          //   labelsVisible: true
           labelsColor: "white"
         }
 
         ValueAxis{
           id: yAxis
-          //min: MonitoringAreasModel.get_min_veg_value(0)
-          //max: MonitoringAreasModel.get_max_veg_value(0)
           labelsColor: "white"
         }
 
@@ -693,10 +783,10 @@ ApplicationWindow {
 
 
             //if (mouse.button == Qt.LeftButton) {
-              // do stuff
+            // do stuff
             //}
             //else if (mouse.button == Qt.RightButton) {
-              //chart.zoomIn()
+            //chart.zoomIn()
             //}
 
             // series.pointsVisible = true;
@@ -713,422 +803,7 @@ ApplicationWindow {
             // }
           }
         }
-
-        // Component.onCompleted: {
-        //   var series = chart.createSeries(ChartView.SeriesTypeLine, "A", xAxis, yAxis);
-        //   series.pointsVisible = true;
-        //   series.color = "green"
-        //
-        //   //var count = list.count;
-        //   //for (var i = 0; i < count; i++) {
-        //       //series.append(list.get(i).x, list.get(i).y);
-        //   //}
-        //
-        //   //const indexes = [0, 1, 2, 3]
-        //   //const dates = [10, 20, 30, 40];
-        //   //const values = [0.4, 0.3, 0.1, 0.7];
-        //
-        //   const values = MonitoringAreasModel.get_y_graph_data(0);
-        //   var count = 80;
-        //
-        //   MonitoringAreasModel.log('hi')
-        //
-        //   for (var i = 0; i < count; i++) {
-        //     series.append(i, bottomPanel.values[i]);
-        //       //series.append(indexes[i], values[i]);
-        //   }
-        // }
-
-        // Component.onCompleted: {
-        //   var series = chart.createSeries(ChartView.SeriesTypeLine, "A", xAxis, yAxis);
-        //
-        //   series.pointsVisible = true;
-        //   series.color = "green"
-        //   series.hovered.connect(
-        //     function(point, state) {
-        //       console.log(point);  // connect onHovered signal to a function
-        //     });
-        //
-        //   //const count = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].length;
-        //   const dates = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-        //   const values = [0.4, 0.3, 0.1, 0.7, 0.9, 0.7, 0.6, 0.4, 0.3, 0.5];
-        //
-        //   //var x = 10; //0.0;
-        //   var pointsCount = indices.length;
-        //
-        //   for (var i = 0; i < 10; i++) {
-        //     //x += 1;
-        //     //var y = (Math.random() * 10.0);
-        //     //var x = dates[i]
-        //     //var y = values[i
-        //     var x = 1
-        //     var y = 2
-        //     series.append(x, y);
-        //     //x += 1;
-        //   }
-        //   }
       }
     }
   }
-
-  // // top bar
-  // Rectangle {
-  //   id: topBar
-  //   height: 40
-  //   anchors {
-  //     top: parent.top
-  //     left: parent.left
-  //     right: parent.right
-  //   }
-  //   color: "#2c3e50"
-  //
-  //   // app logo
-  //   Text {
-  //     id: appLogo
-  //     width: leftBar.width
-  //     anchors {
-  //       top: parent.top
-  //       bottom: parent.bottom
-  //       left: parent.left
-  //       leftMargin: 5
-  //
-  //     }
-  //     verticalAlignment: Text.AlignVCenter
-  //     text: "Monitoria"
-  //     font {
-  //       pointSize: 12
-  //       weight: Font.DemiBold
-  //     }
-  //     color: "white"
-  //
-  //   }
-  //
-  //   // create polygon button
-  //   RoundButton {
-  //     id: createPolygon
-  //     width: 30
-  //     height: 30
-  //     anchors {
-  //       left: appLogo.right
-  //       leftMargin: 5
-  //       verticalCenter: parent.verticalCenter
-  //     }
-  //     icon {
-  //       source: "file:icons/edit-polygon.png"
-  //       color: "transparent"
-  //     }
-  //     enabled: true
-  //
-  //     onClicked: {
-  //       // reset temp polygon
-  //       newPolygon.path = [];
-  //
-  //       // enable/disable relevant edit buttons
-  //       createPolygon.enabled = false;
-  //       insertPolygon.enabled = false;
-  //       cancelPolygon.enabled = true;
-  //
-  //       // begin edit session
-  //       editActive = true;
-  //     }
-  //   }
-  //
-  //   // insert current created polygon button
-  //   RoundButton {
-  //     id: insertPolygon
-  //     width: 30
-  //     height: 30
-  //     anchors {
-  //       left: createPolygon.right
-  //       leftMargin: 5
-  //       verticalCenter: parent.verticalCenter
-  //     }
-  //     icon {
-  //       source: "file:icons/edit-done.png"
-  //       color: "transparent"
-  //     }
-  //     enabled: false
-  //
-  //     onClicked: {
-  //
-  //       // insert new polygon into database
-  //       MonitoringAreasModel.insert_monitoring_area('A02', newPolygon.path);
-  //
-  //       // reset temp polygon
-  //       newPolygon.path = [];
-  //
-  //       // reset model !TODO! make this only refresh new polygons
-  //       MonitoringAreasModel.get_monitoring_areas();
-  //
-  //       // enable createPolygon, disable insertPolygon buttons
-  //       createPolygon.enabled = true;
-  //       insertPolygon.enabled = false;
-  //       cancelPolygon.enabled = false;
-  //
-  //       // end edit session
-  //       editActive = false;
-  //     }
-  //   }
-  //
-  //   // cancel current created polygon button
-  //   RoundButton {
-  //     id: cancelPolygon
-  //     width: 30
-  //     height: 30
-  //     anchors {
-  //       left: insertPolygon.right
-  //       leftMargin: 5
-  //       verticalCenter: parent.verticalCenter
-  //     }
-  //     icon {
-  //       source: "file:icons/edit-cancel.png"
-  //       color: "transparent"
-  //     }
-  //     enabled: false
-  //
-  //     onClicked: {
-  //
-  //       // reset temp polygon
-  //       newPolygon.path = [];
-  //
-  //       // enable createPolygon, disable insertPolygon buttons
-  //       createPolygon.enabled = true;
-  //       insertPolygon.enabled = false;
-  //       cancelPolygon.enabled = false;
-  //
-  //       // end edit session
-  //       editActive = false;
-  //     }
-  //   }
-  //
-  //   // delete current selected polygon button
-  //   RoundButton {
-  //     id: deletePolygon
-  //     width: 30
-  //     height: 30
-  //     anchors {
-  //       right: parent.right
-  //       rightMargin: 5
-  //       verticalCenter: parent.verticalCenter
-  //     }
-  //     icon {
-  //       source: "file:icons/delete-polygon.png"
-  //       color: "transparent"
-  //     }
-  //     enabled: false
-  //
-  //     onClicked: {
-  //
-  //       // clear all selections
-  //       for (var i in polygonsModel.children) {
-  //         if (polygonsModel.children[i]['isSelected'] == true) {
-  //           var selected_id = polygonsModel.children[i]['areaId']
-  //
-  //           // delete selected polygon into database
-  //           MonitoringAreasModel.delete_monitoring_area(selected_id);
-  //         }
-  //       }
-  //
-  //       // reset model !TODO! make this only refresh new polygons
-  //       MonitoringAreasModel.get_monitoring_areas();
-  //
-  //       // reset temp polygon
-  //       newPolygon.path = [];
-  //
-  //       // disable deletePolygon button
-  //       deletePolygon.enabled = false;
-  //
-  //       // end edit session
-  //       editActive = false;
-  //     }
-  //   }
-  //
-  //   // !TODO! temp perform analysis
-  //   RoundButton {
-  //     id: performAnalysis
-  //     width: 30
-  //     height: 30
-  //     anchors {
-  //       right: deletePolygon.left
-  //       rightMargin: 5
-  //       verticalCenter: parent.verticalCenter
-  //     }
-  //     icon {
-  //       source: "file:icons/perform-analysis.png"
-  //       color: "transparent"
-  //     }
-  //     enabled: true
-  //
-  //     onClicked: {
-  //
-  //       // clear all selections
-  //       for (var i in polygonsModel.children) {
-  //         if (polygonsModel.children[i]['isSelected'] == true) {
-  //           var area_id = polygonsModel.children[i]['areaId'];
-  //           MonitoringAreasModel.perform_analysis(area_id);
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
-  //
-  // // left bar
-  // Rectangle {
-  //   id: leftBar
-  //   width: 175
-  //   anchors {
-  //     top: topBar.bottom
-  //     bottom: parent.bottom
-  //     left: parent.left
-  //   }
-  //   color: "#34495e"
-  // }
-  //
-  // // bottom bar
-  // Rectangle {
-  //   id: bottomBar
-  //   height: 40
-  //   anchors {
-  //     bottom: parent.bottom
-  //     left: leftBar.right
-  //     right: parent.right
-  //   }
-  //   color: "#7f8c8d"
-  //
-  //   // header subbar
-  //   Rectangle {
-  //
-  //     id: bottomHeaderBar
-  //     height: 40
-  //     anchors {
-  //       top: parent.top
-  //       left: parent.left
-  //       right: parent.right
-  //     }
-  //     color: "#2c3e50"
-  //
-  //     // expand graph button
-  //     RoundButton {
-  //       id: expandGraph
-  //       width: 30
-  //       height: 30
-  //       anchors {
-  //         right: parent.right
-  //         rightMargin: 5
-  //         verticalCenter: parent.verticalCenter
-  //       }
-  //       icon {
-  //         source: "file:icons/expand-down.png"
-  //         color: "transparent"
-  //       }
-  //       enabled: true
-  //
-  //       onClicked: {
-  //         if (bottomBar.height > bottomHeaderBar.height) {
-  //           bottomBar.height = bottomHeaderBar.height
-  //         }
-  //         else {
-  //           bottomBar.height = 350
-  //         }
-  //
-  //         // reset model !TODO! only refresh map render?
-  //         MonitoringAreasModel.get_monitoring_areas();
-  //       }
-  //     }
-  //   }
-  // }
-  //
-  // // map area
-  // Map {
-  //   id: map
-  //   anchors {
-  //     top: topBar.bottom
-  //     left: leftBar.right
-  //     right: parent.right
-  //     bottom: bottomBar.top
-  //   }
-  //   plugin: Plugin {id: mapPlugin; name: "esri"}
-  //   activeMapType: supportedMapTypes[1]
-  //   center: QtPositioning.coordinate(-22.785610, 119.148699)
-  //   zoomLevel: 16
-  //   copyrightsVisible: false
-  //
-  //   MapPolygon {
-  //     id: newPolygon
-  //     border {width: 3; color: "black"}
-  //     color: Qt.rgba(55, 210, 109, 0.5)
-  //     path: []
-  //   }
-  //
-  //   MouseArea {
-  //     id: mapMouseArea
-  //     anchors.fill: parent
-  //     acceptedButtons: Qt.LeftButton | Qt.RightButton
-  //
-  //     onClicked: {
-  //       if (editActive == true) {
-  //         if (mouse.button == Qt.LeftButton) {
-  //           var point = Qt.point(mouse.x, mouse.y);
-  //           var coord = map.toCoordinate(point);
-  //           newPolygon.addCoordinate(coord)
-  //
-  //           // if 3 vertices detected, enable insert button
-  //           if (newPolygon.path.length >= 3) {
-  //             insertPolygon.enabled = true;
-  //           }
-  //           else {
-  //             insertPolygon.enabled = false;
-  //           }
-  //         }
-  //
-  //         //else if (mouse.button == Qt.RightButton) {
-  //           //var path = newPolygon.path
-  //           //var latestCoord = path[path.length - 1]
-  //           //newPolygon.removeCoordinate(latestCoord)
-  //         //}
-  //       }
-  //     }
-  //   }
-  //
-  //   MapItemView {
-  //     id: polygonsModel
-  //     model: MonitoringAreasModel
-  //     delegate:
-  //
-  //     MapPolygon {
-  //       property int areaId: id
-  //       property string areaCode: code
-  //       property bool isSelected: false
-  //
-  //       id: monitoringArea
-  //       border {width: 3; color: isSelected ? "red" : "green"}
-  //       color: Qt.rgba(55, 210, 109, 0.5)
-  //       path: geometry
-  //
-  //       MouseArea {
-  //         anchors.fill: parent
-  //         onClicked: {
-  //           if (editActive == false) {
-  //             if (mouse.button == Qt.LeftButton) {
-  //
-  //               // clear all selections
-  //               for (var i in polygonsModel.children) {
-  //                 polygonsModel.children[i]['isSelected'] = false
-  //
-  //                 // disable delete button
-  //                 deletePolygon.enabled = false
-  //               }
-  //
-  //               // set current clicked polygon to selected
-  //               monitoringArea.isSelected = true
-  //
-  //               // enable delete button
-  //               deletePolygon.enabled = true
-  //             }
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
 }
